@@ -7,4 +7,5 @@ edition = "2018"
 
 [dependencies]
 clap = { version = "3.0.14", features = ["derive"]}
+parse-display = "0.5.3"
 rusqlite = "0.26.3"
