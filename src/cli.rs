@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
+use rusqlite::Connection as SqliteConnection;
 
-use crate::data_structures::TaskTypes;
-use crate::defaults::{default_table, default_tasktype};
+use crate::data_structures::{TaskPriority, TaskTypes};
+use crate::db::{add_table, add_task, list_all};
+use crate::defaults::default_project;
 
 #[derive(Parser, Debug)]
 #[clap(name = "sg")]
@@ -16,16 +18,18 @@ pub enum MainCommands {
     Add {
         #[clap(short, long)]
         task: String,
-        #[clap(short, long, default_value_t = default_table.to_string())]
+        #[clap(short, long, default_value_t = default_project.to_string())]
         project: String,
-        #[clap(short = 'y', long, default_value_t = default_tasktype)]
+        #[clap(short = 'y', long, default_value_t = TaskTypes::OneTimeTasks)]
         tasktype: TaskTypes,
+        #[clap(short = 'r', long, default_value_t = TaskPriority::Low as u64)]
+        priority: u64,
     },
     /// List tasks
     List {
-        #[clap(short, long, default_value_t = default_table.to_string())]
+        #[clap(short, long, default_value_t = default_project.to_string())]
         project: String,
-        #[clap(short = 'y', long, default_value_t = default_tasktype)]
+        #[clap(short = 'y', long, default_value_t = TaskTypes::OneTimeTasks)]
         tasktype: TaskTypes,
     },
 }
@@ -33,17 +37,19 @@ pub enum MainCommands {
 impl MainCommands {
     // NOTE: calling this `parse_command` instead of parse just to differentiate
     //       from the clap `parse` command
-    pub fn parse_command(&self) {
+    pub fn parse_command(&self, db_connection: &SqliteConnection) {
         match self {
             MainCommands::Add {
                 task,
                 project,
                 tasktype,
+                priority,
             } => {
-                dbg!(task, project, tasktype);
+                add_table(db_connection, project).unwrap();
+                add_task(db_connection, project, *tasktype, *priority, task).unwrap();
             }
             MainCommands::List { project, tasktype } => {
-                dbg!(project, tasktype);
+                list_all(db_connection, project);
             }
         }
     }

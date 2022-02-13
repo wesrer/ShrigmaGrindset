@@ -5,10 +5,12 @@ mod defaults;
 
 use clap::Parser;
 
-use cli::{MainCommands, ShrigmaCli};
+use cli::ShrigmaCli;
+use db::create_connection;
 
 fn main() {
-    let cli = ShrigmaCli::parse();
+    let conn = create_connection().unwrap();
 
-    cli.command.parse_command();
+    let cli = ShrigmaCli::parse();
+    cli.command.parse_command(&conn);
 }
