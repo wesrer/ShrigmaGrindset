@@ -2,25 +2,59 @@ use rusqlite::{params as sqliteparams, Connection as SqliteConnection, Result as
 
 use crate::cli::MainCommands;
 use crate::data_structures::TaskTypes;
+use crate::defaults::{db_name, task_id_tracker_table};
 
 pub fn create_connection() -> SqliteResult<SqliteConnection> {
-    SqliteConnection::open("Shrigma.db")
+    SqliteConnection::open(db_name)
 }
 
 pub fn add_table(conn: &SqliteConnection, project_name: &str) -> SqliteResult<()> {
     let query_string = format!(
         "
         CREATE TABLE IF NOT EXISTS {} (
-            task_id INTEGER PRIMARY KEY,
+            task_id INTEGER NOT NULL,
             task_string TEXT NOT NULL,
             task_type TEXT NOT NULL,
-            priority INTEGER NOT NULL
+            priority INTEGER NOT NULL,
+            uuid STRING PRIMARY KEY
         );
         ",
         project_name,
     );
-    println!("{}", &query_string);
     conn.execute(query_string.as_str(), [])?;
+
+    let query_string = format!(
+        "
+        CREATE TABLE IF NOT EXISTS {} (
+           task_id INTEGER NOT NULL,
+           task_type TEXT NOT NULL,
+           project TEXT NOT NULL
+        );
+        ",
+        task_id_tracker_table
+    );
+    conn.execute(query_string.as_str(), [])?;
+
+    Ok(())
+}
+
+pub fn add_available_id(
+    conn: &SqliteConnection,
+    project_name: &str,
+    task_type: TaskTypes,
+    task_id: u64,
+) -> SqliteResult<()> {
+    let query_string = format!(
+        "
+        INSERT INTO {} (task_id, task_type, project) VALUES (?, ?, ?);
+        ",
+        task_id_tracker_table
+    );
+    conn.execute(
+        query_string.as_str(),
+        sqliteparams![task_id, task_type.to_string(), project_name],
+    )?;
+
     Ok(())
 }
 
