@@ -1,4 +1,8 @@
-use rusqlite::{params as sqliteparams, Connection as SqliteConnection, Result as SqliteResult};
+use rusqlite::{
+    params as sqliteparams, Connection as SqliteConnection, Error as SqliteError, MappedRows,
+    Result as SqliteResult,
+};
+use uuid::Uuid;
 
 use crate::cli::MainCommands;
 use crate::data_structures::TaskTypes;
@@ -58,6 +62,82 @@ pub fn add_available_id(
     Ok(())
 }
 
+pub fn fetch_available_id(
+    conn: &SqliteConnection,
+    project_name: &str,
+    task_type: TaskTypes,
+) -> SqliteResult<u64> {
+    let fetch_query_string = format!(
+        "
+        SELECT
+            task_id
+        FROM
+            {}
+        WHERE
+            task_type=\"{}\" AND
+            project=\"{}\"
+        ORDER BY
+            task_id ASC
+        LIMIT
+            1;
+        ",
+        task_id_tracker_table,
+        task_type.to_string(),
+        project_name
+    );
+    let mut stmt = conn.prepare(&fetch_query_string)?;
+
+    let mut rows = stmt.query_map([], |row| row.get::<_, u64>(0)).unwrap();
+
+    match rows.next() {
+        None => {
+            let fetch_last_used_id = format!(
+                "
+                SELECT
+                    task_id
+                FROM
+                    {}
+                WHERE
+                    task_type=\"{}\"
+                ORDER BY
+                    task_id ASC
+                LIMIT
+                    1;
+                ",
+                project_name,
+                task_type.to_string()
+            );
+
+            let mut stmt = conn.prepare(&fetch_last_used_id)?;
+            let mut rows = stmt.query_map([], |row| row.get::<_, u64>(0)).unwrap();
+
+            match rows.next() {
+                None => Ok(1),
+                Some(x) => Ok(x.unwrap() + 1),
+            }
+        }
+        Some(x) => {
+            let x = x.unwrap();
+            let delete_query_string = format!(
+                "
+                DELETE FROM
+                    {}
+                WHERE
+                    task_type=\"{}\" AND
+                    project=\"{}\" AND
+                    task_id={};
+                ",
+                task_id_tracker_table,
+                task_type.to_string(),
+                project_name,
+                x
+            );
+            conn.execute(&delete_query_string, [])?;
+            Ok(x)
+        }
+    }
+}
+
 pub fn add_task(
     conn: &SqliteConnection,
     project_name: &str,
@@ -65,21 +145,24 @@ pub fn add_task(
     priority: u64,
     task_string: &str,
 ) -> SqliteResult<()> {
+    let uuid = Uuid::new_v4().to_simple().to_string();
+    let task_id = 1; // FIXME
+
     let query_string = format!(
         "
-        INSERT INTO {} (task_string, task_type, priority) VALUES (?, ?, ?);
+        INSERT INTO {} (task_id, task_string, task_type, priority, uuid) VALUES (?, ?, ?, ?, ?);
         ",
         project_name,
     );
     conn.execute(
         query_string.as_str(),
-        sqliteparams![task_string, task_type.to_string(), priority],
+        sqliteparams![task_id, task_string, task_type.to_string(), priority, uuid],
     )?;
 
     Ok(())
 }
 
-pub fn list_all(conn: &SqliteConnection, table_name: &str) {
+pub fn list_all(conn: &SqliteConnection, table_name: &str) -> SqliteResult<()> {
     let query_string = format!(
         "
         SELECT
@@ -91,7 +174,7 @@ pub fn list_all(conn: &SqliteConnection, table_name: &str) {
         ",
         table_name
     );
-    let mut stmt = conn.prepare(&query_string).unwrap();
+    let mut stmt = conn.prepare(&query_string)?;
 
     let tasks = stmt
         .query_map([], |row| {
@@ -111,4 +194,5 @@ pub fn list_all(conn: &SqliteConnection, table_name: &str) {
     }
 
     dbg!(tasks_vec);
+    Ok(())
 }

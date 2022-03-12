@@ -27,3 +27,11 @@ impl Default for TaskPriority {
         Self::Low
     }
 }
+
+pub struct Task {
+    task: String,
+    project: String,
+    tasktype: TaskTypes,
+    task_id: u64,
+    priority: u64,
+}
